@@ -1,33 +1,44 @@
+import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   const { prompt } = req.body;
-  const apiKey = process.env.STABILITY_API_KEY;
 
-  const response = await fetch("https://api.stability.ai/v1/generation/stable-diffusion-v1-6/text-to-image", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      text_prompts: [{ text: prompt }],
-      cfg_scale: 8,
-      height: 512,
-      width: 512,
-      samples: 1,
-      steps: 30,
-    }),
-  });
+  if (!prompt || prompt.trim() === '') {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
 
-  const result = await response.json();
-  const imageBase64 = result.artifacts[0]?.base64;
+  try {
+    const response = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-v1-5/text-to-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        text_prompts: [{ text: prompt }],
+        cfg_scale: 7,
+        height: 512,
+        width: 512,
+        samples: 1,
+        steps: 30,
+      }),
+    });
 
-  if (imageBase64) {
-    const imageUrl = `data:image/png;base64,${imageBase64}`;
-    return res.status(200).json({ imageUrl });
-  } else {
-    return res.status(500).json({ error: "Image generation failed." });
+    if (!response.ok) {
+      const error = await response.json();
+      return res.status(response.status).json({ error: error.message || 'Generation failed' });
+    }
+
+    const data = await response.json();
+    const base64Image = data.artifacts[0].base64;
+
+    // Return image as a base64 data URL so frontend can display immediately
+    res.status(200).json({ imageUrl: `data:image/png;base64,${base64Image}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 }
