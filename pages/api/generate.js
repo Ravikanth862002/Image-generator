@@ -1,13 +1,11 @@
-import fetch from 'node-fetch';
-
+// pages/api/generate.js
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { prompt } = req.body;
-
-  if (!prompt || prompt.trim() === '') {
+  if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
 
@@ -16,11 +14,13 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json',
         Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
       },
       body: JSON.stringify({
         text_prompts: [{ text: prompt }],
         cfg_scale: 7,
+        clip_guidance_preset: 'FAST_BLUE',
         height: 512,
         width: 512,
         samples: 1,
@@ -34,11 +34,14 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    const base64Image = data.artifacts[0].base64;
+    const base64 = data.artifacts?.[0]?.base64;
 
-    // Return image as a base64 data URL so frontend can display immediately
-    res.status(200).json({ imageUrl: `data:image/png;base64,${base64Image}` });
-  } catch (error) {
-    res.status(500).json({ error: error.message || 'Internal Server Error' });
+    if (!base64) {
+      return res.status(500).json({ error: 'No image returned' });
+    }
+
+    res.status(200).json({ imageUrl: `data:image/png;base64,${base64}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 }
